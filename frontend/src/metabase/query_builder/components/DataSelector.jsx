@@ -4,6 +4,7 @@ import PropTypes from "prop-types";
 import { t } from "ttag";
 import cx from "classnames";
 
+import ExternalLink from "metabase/components/ExternalLink";
 import Icon from "metabase/components/Icon";
 import PopoverWithTrigger from "metabase/components/PopoverWithTrigger";
 import AccordionList from "metabase/components/AccordionList";
@@ -111,6 +112,15 @@ const FieldTriggerContent = ({ selectedDatabase, selectedField }) => {
         entityQuery: ownProps.databaseQuery,
       }) ||
       [],
+    hasFetchedDatabasesWithTablesSaved: !!Databases.selectors.getList(state, {
+      entityQuery: { include: "tables", saved: true },
+    }),
+    hasFetchedDatabasesWithSaved: !!Databases.selectors.getList(state, {
+      entityQuery: { saved: true },
+    }),
+    hasFetchedDatabasesWithTables: !!Databases.selectors.getList(state, {
+      entityQuery: { include: "tables" },
+    }),
   }),
   {
     fetchDatabases: databaseQuery => Databases.actions.fetchList(databaseQuery),
@@ -503,13 +513,20 @@ export class UnconnectedDataSelector extends Component {
     }
   }
 
-  hasStepData(stepName) {
+  hasPreloadedStepData(stepName) {
+    const {
+      hasFetchedDatabasesWithTables,
+      hasFetchedDatabasesWithTablesSaved,
+      hasFetchedDatabasesWithSaved,
+    } = this.props;
     if (stepName === DATABASE_STEP) {
-      return this.state.databases.length > 0;
-    } else if (stepName === SCHEMA_STEP) {
-      return this.state.schemas.length > 0;
-    } else if (stepName === TABLE_STEP) {
-      return this.state.tables.length > 0;
+      return hasFetchedDatabasesWithTablesSaved || hasFetchedDatabasesWithSaved;
+    } else if (stepName === SCHEMA_STEP || stepName === TABLE_STEP) {
+      return (
+        hasFetchedDatabasesWithTablesSaved ||
+        (hasFetchedDatabasesWithTables &&
+          !this.state.selectedDatabase.is_saved_questions)
+      );
     } else if (stepName === FIELD_STEP) {
       return this.state.fields.length > 0;
     }
@@ -520,7 +537,7 @@ export class UnconnectedDataSelector extends Component {
       ...stateChange,
       activeStep: stepName,
     });
-    if (!this.hasStepData(stepName)) {
+    if (!this.hasPreloadedStepData(stepName)) {
       await this.loadStepData(stepName);
     }
     if (skipSteps) {
@@ -859,12 +876,14 @@ const TablePicker = ({
       },
     ];
     return (
-      <div>
+      <div style={{ width: 300, overflowY: "auto" }}>
         <AccordionList
           id="TablePicker"
           key="tablePicker"
           className="text-brand"
           sections={sections}
+          maxHeight={Infinity}
+          width={"100%"}
           searchable
           onChange={item => onChangeTable(item.table)}
           itemIsSelected={item =>
@@ -881,13 +900,16 @@ const TablePicker = ({
         {isSavedQuestionList && (
           <div className="bg-light p2 text-centered border-top">
             {t`Is a question missing?`}
-            <a
+            <ExternalLink
               href={MetabaseSettings.docsUrl(
-                "users-guide/04-asking-questions",
-                "source-data",
+                "users-guide/custom-questions",
+                "picking-your-starting-data",
               )}
+              target="_blank"
               className="block link"
-            >{t`Learn more about nested queries`}</a>
+            >
+              {t`Learn more about nested queries`}
+            </ExternalLink>
           </div>
         )}
       </div>
@@ -950,12 +972,14 @@ class FieldPicker extends Component {
     ];
 
     return (
-      <div style={{ width: 300 }}>
+      <div style={{ width: 300, overflowY: "auto" }}>
         <AccordionList
           id="FieldPicker"
           key="fieldPicker"
           className="text-brand"
           sections={sections}
+          maxHeight={Infinity}
+          width={"100%"}
           searchable
           onChange={item => onChangeField(item.field)}
           itemIsSelected={item =>

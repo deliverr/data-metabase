@@ -1,12 +1,15 @@
 (ns metabase.api.native-query-snippet
   "Native query snippet (/api/native-query-snippet) endpoints."
-  (:require [compojure.core :refer [GET POST PUT]]
+  (:require [clojure.data :as data]
+            [compojure.core :refer [GET POST PUT]]
             [metabase.api.common :as api]
             [metabase.models
              [interface :as mi]
              [native-query-snippet :as snippet :refer [NativeQuerySnippet]]]
             [metabase.util :as u]
-            [metabase.util.schema :as su]
+            [metabase.util
+             [i18n :refer [tru]]
+             [schema :as su]]
             [schema.core :as s]
             [toucan
              [db :as db]
@@ -31,44 +34,51 @@
   [id]
   (hydrated-native-query-snippet id))
 
+(defn- check-snippet-name-is-unique [snippet-name]
+  (when (db/exists? NativeQuerySnippet :name snippet-name)
+    (throw (ex-info (tru "A snippet with that name already exists. Please pick a different name.")
+                    {:status-code 400}))))
+
 (api/defendpoint POST "/"
   "Create a new `NativeQuerySnippet`."
-  [:as {{:keys [content database_id description name]} :body}]
-  {content     s/Str
-   database_id su/IntGreaterThanZero
-   description (s/maybe s/Str)
-   name        snippet/NativeQuerySnippetName}
-  (api/check-superuser)
-  (api/check-500
-   (db/insert! NativeQuerySnippet
-               {:content     content
-                :creator_id  api/*current-user-id*
-                :database_id database_id
-                :description description
-                :name        name})))
+  [:as {{:keys [content description name collection_id]} :body}]
+  {content       s/Str
+   description   (s/maybe s/Str)
+   name          snippet/NativeQuerySnippetName
+   collection_id (s/maybe su/IntGreaterThanZero)}
+  (check-snippet-name-is-unique name)
+  (let [snippet {:content       content
+                 :creator_id    api/*current-user-id*
+                 :description   description
+                 :name          name
+                 :collection_id collection_id}]
+    (api/create-check NativeQuerySnippet snippet)
+    (api/check-500 (db/insert! NativeQuerySnippet snippet))))
 
-(defn- write-check-and-update-snippet!
+(defn- check-perms-and-update-snippet!
   "Check whether current user has write permissions, then update NativeQuerySnippet with values in `body`.  Returns
   updated/hydrated NativeQuerySnippet"
   [id body]
-  (let [snippet     (api/write-check NativeQuerySnippet id)
+  (let [snippet     (NativeQuerySnippet id)
         body-fields (u/select-keys-when body
-                      :present #{:description}
+                      :present #{:description :collection_id}
                       :non-nil #{:archived :content :name})
-        changes     (when-not (= body-fields (select-keys snippet (keys body-fields)))
-                      body-fields)]
-    (when changes
+        [changes]   (data/diff body-fields snippet)]
+    (when (seq changes)
+      (api/update-check snippet changes)
+      (when-let [new-name (:name changes)]
+        (check-snippet-name-is-unique new-name))
       (db/update! NativeQuerySnippet id changes))
     (hydrated-native-query-snippet id)))
 
 (api/defendpoint PUT "/:id"
   "Update an existing `NativeQuerySnippet`."
-  [id :as {{:keys [archived content description name] :as body} :body}]
-  {archived    (s/maybe s/Bool)
-   content     (s/maybe s/Str)
-   description (s/maybe s/Str)
-   name        (s/maybe snippet/NativeQuerySnippetName)}
-  (write-check-and-update-snippet! id body))
-
+  [id :as {{:keys [archived content description name collection_id] :as body} :body}]
+  {archived      (s/maybe s/Bool)
+   content       (s/maybe s/Str)
+   description   (s/maybe s/Str)
+   name          (s/maybe snippet/NativeQuerySnippetName)
+   collection_id (s/maybe su/IntGreaterThanZero)}
+  (check-perms-and-update-snippet! id body))
 
 (api/define-routes)

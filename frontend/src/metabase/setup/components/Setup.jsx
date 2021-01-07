@@ -3,6 +3,7 @@ import React, { Component } from "react";
 import ReactDOM from "react-dom";
 import PropTypes from "prop-types";
 import { t } from "ttag";
+import ExternalLink from "metabase/components/ExternalLink";
 import LogoIcon from "metabase/components/LogoIcon";
 import NewsletterForm from "metabase/components/NewsletterForm";
 import MetabaseAnalytics from "metabase/lib/analytics";
@@ -28,7 +29,7 @@ export default class Setup extends Component {
     userDetails: PropTypes.object,
     languageDetails: PropTypes.object,
     setActiveStep: PropTypes.func.isRequired,
-    databaseDetails: PropTypes.object.isRequired,
+    databaseDetails: PropTypes.object,
   };
 
   completeWelcome() {
@@ -45,7 +46,9 @@ export default class Setup extends Component {
       // fall back to matching the prefix (e.g. just "zh" from "zh-tw")
       locales.find(
         ([code]) => code.toLowerCase() === browserLocale.split("-")[0],
-      );
+      ) ||
+      // if our locale list doesn't include the navigator language, pick English
+      locales.find(([code]) => code === "en");
     if (defaultLanguage) {
       const [code, name] = defaultLanguage;
       this.setState({ defaultLanguage: { name, code } });
@@ -57,11 +60,11 @@ export default class Setup extends Component {
     return (
       <div className="SetupHelp bordered border-dashed p2 rounded mb4">
         {t`If you feel stuck`},{" "}
-        <a
+        <ExternalLink
           className="link"
           href={MetabaseSettings.docsUrl("setting-up-metabase")}
           target="_blank"
-        >{t`our getting started guide`}</a>{" "}
+        >{t`our getting started guide`}</ExternalLink>{" "}
         {t`is just a click away.`}
       </div>
     );

@@ -25,7 +25,7 @@
            java.time.temporal.Temporal
            java.util.UUID
            [metabase.driver.common.parameters CommaSeparatedNumbers Date DateRange FieldFilter MultipleValues
-            NativeQuerySnippet ReferencedCardQuery]))
+            ReferencedCardQuery ReferencedQuerySnippet]))
 
 ;;; ------------------------------------ ->prepared-substitution & default impls -------------------------------------
 
@@ -103,43 +103,44 @@
   (fn [driver v] [(driver/the-initialized-driver driver) (class v)])
   :hierarchy #'driver/hierarchy)
 
-(defn- create-replacement-snippet [nil-or-obj]
-  (let [{:keys [sql-string param-values]} (->prepared-substitution driver/*driver* nil-or-obj)]
+(defn- create-replacement-snippet
+  [driver nil-or-obj]
+  (let [{:keys [sql-string param-values]} (->prepared-substitution driver nil-or-obj)]
     {:replacement-snippet     sql-string
      :prepared-statement-args param-values}))
 
 (defmethod ->replacement-snippet-info [:sql nil]
-  [_ this]
-  (create-replacement-snippet this))
+  [driver this]
+  (create-replacement-snippet driver this))
 
 (defmethod ->replacement-snippet-info [:sql Object]
-  [_ this]
-  (create-replacement-snippet (str this)))
+  [driver this]
+  (create-replacement-snippet driver (str this)))
 
 (defmethod ->replacement-snippet-info [:sql Number]
-  [_ this]
-  (create-replacement-snippet this))
+  [driver this]
+  (create-replacement-snippet driver this))
 
 (defmethod ->replacement-snippet-info [:sql Boolean]
-  [_ this]
-  (create-replacement-snippet this))
+  [driver this]
+  (create-replacement-snippet driver this))
 
 (defmethod ->replacement-snippet-info [:sql Keyword]
-  [_ this]
+  [driver this]
   (if (= this i/no-value)
     {:replacement-snippet ""}
-    (create-replacement-snippet this)))
+    (create-replacement-snippet driver this)))
 
 (defmethod ->replacement-snippet-info [:sql SqlCall]
-  [_ this]
-  (create-replacement-snippet this))
+  [driver this]
+  (create-replacement-snippet driver this))
 
 (defmethod ->replacement-snippet-info [:sql UUID]
-  [_ this]
+  [driver this]
   {:replacement-snippet (format "CAST('%s' AS uuid)" (str this))})
 
 (defmethod ->replacement-snippet-info [:sql CommaSeparatedNumbers]
-  [_ {:keys [numbers]}]
+  [driver {:keys [numbers]}]
   {:replacement-snippet (str/join ", " numbers)})
 
 (defmethod ->replacement-snippet-info [:sql MultipleValues]
@@ -158,7 +159,7 @@
 
 (defmethod ->replacement-snippet-info [:sql Date]
   [driver {:keys [s]}]
-  (create-replacement-snippet (maybe-parse-temporal-literal s)))
+  (create-replacement-snippet driver (maybe-parse-temporal-literal s)))
 
 (defn- prepared-ts-subs [driver operator date-str]
   (let [{:keys [sql-string param-values]} (->prepared-substitution driver (maybe-parse-temporal-literal date-str))]
@@ -240,10 +241,9 @@
   (:replacement-snippet
    (honeysql->replacement-snippet-info
     driver
-    (let [identifier (sql.qp/->honeysql driver (sql.qp/field->identifier driver field))
-          identifier (cond->> identifier
-                       (isa? special-type :type/UNIXTimestampSeconds)      (sql.qp/unix-timestamp->honeysql driver :seconds)
-                       (isa? special-type :type/UNIXTimestampMilliseconds) (sql.qp/unix-timestamp->honeysql driver :milliseconds))]
+    (let [identifier (cond->> (sql.qp/->honeysql driver (sql.qp/field->identifier driver field))
+                       (isa? special-type :type/UNIXTimestamp)
+                       (sql.qp/unix-timestamp->honeysql driver (sql.qp/special-type->unix-timestamp-unit special-type)))]
       (if (date-params/date-type? param-type)
         (sql.qp/date driver :day identifier)
         identifier)))))
@@ -270,14 +270,14 @@
 ;;; ------------------------------------ Referenced Card replacement snippet info ------------------------------------
 
 (defmethod ->replacement-snippet-info [:sql ReferencedCardQuery]
-  [_driver {:keys [query]}]
+  [_ {:keys [query]}]
   {:prepared-statement-args nil
    :replacement-snippet     (str "(" query ")")})
 
 
 ;;; ---------------------------------- Native Query Snippet replacement snippet info ---------------------------------
 
-(defmethod ->replacement-snippet-info [:sql NativeQuerySnippet]
-  [_driver {:keys [content]}]
+(defmethod ->replacement-snippet-info [:sql ReferencedQuerySnippet]
+  [_ {:keys [content]}]
   {:prepared-statement-args nil
    :replacement-snippet     content})

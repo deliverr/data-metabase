@@ -19,7 +19,7 @@
                                    :type/Integer        "INTEGER"
                                    ;; TEXT is considered deprecated -- see
                                    ;; https://msdn.microsoft.com/en-us/library/ms187993.aspx
-                                   :type/Text           "VARCHAR(254)"
+                                   :type/Text           "VARCHAR(1024)"
                                    :type/Time           "TIME"}]
   (defmethod sql.tx/field-base-type->sql-type [:sqlserver base-type] [_ _] database-type))
 
@@ -61,3 +61,16 @@
   ([_ db-name table-name field-name] [db-name "dbo" table-name field-name]))
 
 (defmethod sql.tx/pk-sql-type :sqlserver [_] "INT IDENTITY(1,1)")
+
+(defmethod tx/aggregate-column-info :sqlserver
+  ([driver ag-type]
+   (merge
+    ((get-method tx/aggregate-column-info ::tx/test-extensions) driver ag-type)
+    (when (#{:count :cum-count} ag-type)
+      {:base_type :type/Integer})))
+
+  ([driver ag-type field]
+   (merge
+    ((get-method tx/aggregate-column-info ::tx/test-extensions) driver ag-type field)
+    (when (#{:count :cum-count} ag-type)
+      {:base_type :type/Integer}))))

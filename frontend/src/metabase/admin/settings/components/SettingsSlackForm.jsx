@@ -10,8 +10,6 @@ import { updateSlackSettings } from "../settings";
 import Button from "metabase/components/Button";
 import Icon from "metabase/components/Icon";
 
-import RetinaImage from "react-retina-image";
-
 import _ from "underscore";
 import { t, jt } from "ttag";
 
@@ -237,12 +235,15 @@ export default class SettingsSlackForm extends Component {
       <form noValidate>
         <div className="px2" style={{ maxWidth: "585px" }}>
           <h1>
-            Metabase
-            <RetinaImage
+            {t`Metabase`}
+            <img
+              width="79px"
               className="mx1"
               src="app/assets/img/slack_emoji.png"
-              width={79}
-              forceOriginalDimensions={false /* broken in React v0.13 */}
+              srcSet="
+                app/assets/img/slack_emoji.png    1x,
+                app/assets/img/slack_emoji@2x.png 2x
+              "
             />
             Slack
           </h1>
